@@ -4,11 +4,12 @@ class ViewController: UIViewController {
     
     @IBOutlet weak var searchField: UITextField!
     @IBOutlet weak var table_Data: UITableView!
+    @IBOutlet weak var searchButton: UIButton!
     
     var myUsers: [User] = [] {
         didSet {
-            DispatchQueue.main.async { [self] in
-                table_Data.reloadData()
+            DispatchQueue.main.async {
+                self.table_Data.reloadData()
             }
         }
     }
@@ -18,31 +19,47 @@ class ViewController: UIViewController {
     var query: String?
     
     let userManager = UserManager()
-
+    let loadingSpinner = UIActivityIndicatorView(style: .medium)
+    
     @IBAction func searchBtn(_ sender: UIButton) {
         guard let searchText = searchField.text, !searchText.isEmpty else {
             print("Search field is empty.")
             return
         }
         
+        // Reset state for a new search
         query = searchText
         currentPage = 1
         myUsers.removeAll()
+        table_Data.reloadData()
+        
+        // Start loading users for the new search
+       
         loadUsers()
     }
     
     func loadUsers() {
-        
         guard let query = query, !isLoading else { return }
         isLoading = true
+       
+        table_Data.tableFooterView = loadingSpinner
+        loadingSpinner.startAnimating()
         
         userManager.fetchUsers(query: query, page: currentPage) { result in
-            self.isLoading = false
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.loadingSpinner.stopAnimating()
+                self.table_Data.tableFooterView = nil
+                
+            }
+            
             switch result {
             case .success(let response):
-                self.myUsers.append(contentsOf: response.items)
-                DispatchQueue.main.async {
-                    self.table_Data.reloadData()
+                if response.items.isEmpty && self.myUsers.isEmpty {
+                    self.showNoResultsMessage()
+                } else {
+                    self.myUsers.append(contentsOf: response.items)
+                    self.hideNoResultsMessage()
                 }
             case .failure(let error):
                 print("Error fetching users: \(error.localizedDescription)")
@@ -51,7 +68,6 @@ class ViewController: UIViewController {
     }
     
     func loadMoreUsers() {
-        
         guard let query = query, !isLoading else { return }
         currentPage += 1
         loadUsers()
@@ -59,33 +75,52 @@ class ViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
         table_Data.dataSource = self
         table_Data.delegate = self
+        table_Data.tableFooterView = UIView() // Removes empty cells
         
+        loadingSpinner.hidesWhenStopped = true
+    }
+    
+    func showNoResultsMessage() {
+        let noResultsLabel = UILabel(frame: CGRect(x: 0, y: 0, width: table_Data.bounds.size.width, height: table_Data.bounds.size.height))
+        noResultsLabel.text = "No results found"
+        noResultsLabel.textAlignment = .center
+        noResultsLabel.sizeToFit()
+        
+        table_Data.backgroundView = noResultsLabel
+        table_Data.separatorStyle = .none
+    }
+    
+    func hideNoResultsMessage() {
+        table_Data.backgroundView = nil
+        table_Data.separatorStyle = .singleLine
     }
 }
 
 extension ViewController: UITableViewDelegate {
     
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        let offsetY = scrollView.contentOffset.y
-        let contentHeight = scrollView.contentSize.height
-        
-        if offsetY > contentHeight - scrollView.frame.size.height * 2 {
-            loadMoreUsers()
-        }
-    }
-    
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         return 100.0
+    }
+    
+    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        // Load more users when scrolling near the end
+        if indexPath.row == myUsers.count - 1 && !isLoading {
+            loadMoreUsers()
+        }
     }
 }
 
 extension ViewController: UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return myUsers.count
+        if myUsers.isEmpty {
+            return 0
+        } else {
+            hideNoResultsMessage()
+            return myUsers.count
+        }
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -106,4 +141,3 @@ extension ViewController: UITableViewDataSource {
         }
     }
 }
-
