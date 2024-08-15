@@ -14,8 +14,15 @@ class UserManager {
             return
         }
         
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
         
-        let dataTask = URLSession.shared.dataTask(with: url) { (data, _, error) in
+        // Add the GitHub personal access token to the request header
+        let token = "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"
+        
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let dataTask = URLSession.shared.dataTask(with: request) { (data, _, error) in
             if let error = error {
                 completion(.failure(error))
                 return
@@ -31,10 +38,8 @@ class UserManager {
             
             do {
                 let decodeData = try decoder.decode(GHResponse.self, from: jsonData)
-               
                 completion(.success(decodeData))
             } catch {
-                
                 completion(.failure(error))
             }
         }

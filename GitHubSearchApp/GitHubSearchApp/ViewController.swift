@@ -1,19 +1,15 @@
 import UIKit
 
 class ViewController: UIViewController {
-
-    // MARK: - Outlets
     
     @IBOutlet weak var searchField: UITextField!
     @IBOutlet weak var table_Data: UITableView!
     @IBOutlet weak var searchButton: UIButton!
-
-    // MARK: - Properties
     
     var myUsers: [User] = [] {
         didSet {
-            DispatchQueue.main.async {
-                self.table_Data.reloadData()
+            DispatchQueue.main.async { [self] in
+                table_Data.reloadData()
             }
         }
     }
@@ -21,31 +17,9 @@ class ViewController: UIViewController {
     var currentPage = 1
     var isLoading = false
     var query: String?
-
+    
     let userManager = UserManager()
     let loadingSpinner = UIActivityIndicatorView(style: .medium)
-    
-    // MARK: - Lifecycle Methods
-    
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        setupTableView()
-        setupLoadingSpinner()
-    }
-
-    // MARK: - Setup Methods
-    
-    private func setupTableView() {
-        table_Data.dataSource = self
-        table_Data.delegate = self
-        table_Data.tableFooterView = UIView() // Removes empty cells
-    }
-    
-    private func setupLoadingSpinner() {
-        loadingSpinner.hidesWhenStopped = true
-    }
-    
-    // MARK: - Actions
     
     @IBAction func searchBtn(_ sender: UIButton) {
         guard let searchText = searchField.text, !searchText.isEmpty else {
@@ -53,17 +27,18 @@ class ViewController: UIViewController {
             return
         }
         
-        // Reset state for a new search
         query = searchText
         currentPage = 1
         myUsers.removeAll()
+        loadUsers()
         table_Data.reloadData()
         
-        // Start loading users for the new search
-        loadUsers()
+        // Disable search button to prevent multiple requests
+            searchButton?.isEnabled = false
+            
+            // Load new users based on the new query
+            loadUsers()
     }
-    
-    // MARK: - Data Loading Methods
     
     func loadUsers() {
         guard let query = query, !isLoading else { return }
@@ -82,10 +57,13 @@ class ViewController: UIViewController {
             switch result {
             case .success(let response):
                 if response.items.isEmpty && self.myUsers.isEmpty {
+                    // Show "No results" message
                     self.showNoResultsMessage()
                 } else {
                     self.myUsers.append(contentsOf: response.items)
-                    self.hideNoResultsMessage()
+                    DispatchQueue.main.async {
+                        self.table_Data.reloadData()
+                    }
                 }
             case .failure(let error):
                 print("Error fetching users: \(error.localizedDescription)")
@@ -99,7 +77,14 @@ class ViewController: UIViewController {
         loadUsers()
     }
     
-    // MARK: - UI Helper Methods
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        table_Data.dataSource = self
+        table_Data.delegate = self
+        table_Data.tableFooterView = UIView() // Removes empty cells
+        
+        loadingSpinner.hidesWhenStopped = true
+    }
     
     func showNoResultsMessage() {
         let noResultsLabel = UILabel(frame: CGRect(x: 0, y: 0, width: table_Data.bounds.size.width, height: table_Data.bounds.size.height))
@@ -117,8 +102,6 @@ class ViewController: UIViewController {
     }
 }
 
-// MARK: - UITableViewDelegate
-
 extension ViewController: UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
@@ -132,8 +115,6 @@ extension ViewController: UITableViewDelegate {
         }
     }
 }
-
-// MARK: - UITableViewDataSource
 
 extension ViewController: UITableViewDataSource {
     
@@ -154,8 +135,6 @@ extension ViewController: UITableViewDataSource {
         
         return cell
     }
-    
-    // MARK: - Navigation
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if segue.identifier == "TableViewConnection",
